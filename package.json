@@ -1,0 +1,47 @@
+{
+  "name": "weather-what-to-wear",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Single-page weather app with feels-like emphasis and what-to-wear advice.",
+  "scripts": {
+    "dev": "npx --yes serve .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:coverage": "vitest run --coverage",
+    "test:list": "vitest list",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "deadcode": "knip",
+    "dupcheck": "jscpd src tests",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run deadcode && npm run dupcheck && npm test",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md,html,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@vitest/coverage-v8": "4.1.9",
+    "eslint": "9.39.1",
+    "globals": "16.5.0",
+    "husky": "9.1.7",
+    "jscpd": "4.0.5",
+    "knip": "5.66.0",
+    "lint-staged": "16.2.6",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9"
+  }
+}
