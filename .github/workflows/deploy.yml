@@ -48,6 +48,16 @@ jobs:
       - name: Build site (with performance metrics)
         run: npm run build
 
+      # Inject public runtime config (Sentry DSN, PostHog key) from repo Actions
+      # variables into the built page, so keys are set at deploy time and never
+      # committed to source. Unset variables substitute "" and are a no-op.
+      - name: Inject runtime config
+        env:
+          SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+        run: |
+          node -e "const f='dist/index.html';const fs=require('fs');let h=fs.readFileSync(f,'utf8');h=h.replace('sentryDsn: \"\"','sentryDsn: '+JSON.stringify(process.env.SENTRY_DSN||''));h=h.replace('posthogKey: \"\"','posthogKey: '+JSON.stringify(process.env.POSTHOG_KEY||''));fs.writeFileSync(f,h);console.log('runtime config injected (sentry='+!!process.env.SENTRY_DSN+', posthog='+!!process.env.POSTHOG_KEY+')')"
+
       - name: Upload build metrics
         if: always()
         uses: actions/upload-artifact@v7
