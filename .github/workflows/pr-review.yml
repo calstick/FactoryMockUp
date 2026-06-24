@@ -1,0 +1,43 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    env:
+      FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BASE_REF: ${{ github.base_ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect PR diff
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          git diff "origin/$BASE_REF...HEAD" > pr.diff
+          echo "Changed files:"
+          git diff --name-only "origin/$BASE_REF...HEAD"
+
+      - name: Install Factory Droid
+        if: ${{ env.FACTORY_API_KEY != '' }}
+        run: curl -fsSL https://app.factory.ai/cli | sh
+
+      - name: Generate review
+        if: ${{ env.FACTORY_API_KEY != '' }}
+        run: |
+          droid exec --auto medium "Act as a code reviewer for this pull request. Read pr.diff and the changed files, then write concise, actionable review feedback to a file named review.md (GitHub-flavored Markdown). Cover correctness, security, missing tests, and adherence to the conventions in AGENTS.md. If the change looks good, write a brief 'LGTM' with a one-line rationale. Do not modify any source files."
+
+      - name: Post review comment
+        if: ${{ env.FACTORY_API_KEY != '' && hashFiles('review.md') != '' }}
+        run: gh pr comment "$PR_NUMBER" --body-file review.md

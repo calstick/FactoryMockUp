@@ -6,6 +6,7 @@
   "description": "Single-page weather app with feels-like emphasis and what-to-wear advice.",
   "scripts": {
     "dev": "npx --yes serve .",
+    "build": "node scripts/build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
@@ -19,8 +20,9 @@
     "typecheck": "tsc --noEmit",
     "deadcode": "knip",
     "dupcheck": "jscpd src tests",
+    "deadflags": "node scripts/check-dead-flags.mjs",
     "validate:agents": "node scripts/validate-agents-md.mjs",
-    "check": "npm run lint && npm run format:check && npm run typecheck && npm run deadcode && npm run dupcheck && npm run validate:agents && npm test",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run deadcode && npm run dupcheck && npm run deadflags && npm run validate:agents && npm test",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -35,6 +37,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@vitest/coverage-v8": "4.1.9",
+    "esbuild": "0.28.1",
     "eslint": "10.0.1",
     "globals": "17.6.0",
     "husky": "9.1.7",

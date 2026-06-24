@@ -1,0 +1,108 @@
+name: Deploy
+
+# Continuous deployment: every merge to main builds the static site and
+# publishes it to GitHub Pages. Combined with release-please tags, this gives
+# the project an automated, frequently-exercised release path.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages deployment permissions.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let the newest merge win.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Cache the esbuild transform output keyed on the sources it depends on,
+      # so unchanged builds restore instantly instead of re-minifying.
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: dist
+          key: build-${{ runner.os }}-${{ hashFiles('src/**/*.js', 'index.html', 'scripts/build.mjs') }}
+
+      # The build script measures per-stage duration and the minification byte
+      # savings, writes them to dist/build-metrics.json, and appends a table to
+      # this job's summary so build performance is tracked on every deploy.
+      - name: Build site (with performance metrics)
+        run: npm run build
+
+      - name: Upload build metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-metrics
+          path: dist/build-metrics.json
+          retention-days: 30
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # Deployment observability: record where to watch this deploy's impact so
+      # anyone (human or agent) can find the dashboards from the run itself.
+      - name: Annotate deploy with dashboard pointers
+        if: always()
+        run: |
+          {
+            echo "### Deployment"
+            echo ""
+            echo "- **Status:** ${{ job.status }}"
+            echo "- **URL:** ${{ steps.deployment.outputs.page_url }}"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+            echo ""
+            echo "**Watch the impact**"
+            echo "- Errors (Sentry): ${SENTRY_DASHBOARD_URL:-https://sentry.io/organizations/your-org/issues/}"
+            echo "- Product analytics (PostHog): ${POSTHOG_DASHBOARD_URL:-https://us.posthog.com/}"
+            echo "- Deployments: https://github.com/${{ github.repository }}/deployments"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          SENTRY_DASHBOARD_URL: ${{ vars.SENTRY_DASHBOARD_URL }}
+          POSTHOG_DASHBOARD_URL: ${{ vars.POSTHOG_DASHBOARD_URL }}
+
+      # Deploy notification: post to Slack/Mattermost when a webhook is set.
+      # Skipped silently when the secret is absent, so forks still pass.
+      - name: Notify deploy channel
+        if: always() && env.DEPLOY_WEBHOOK_URL != ''
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+        run: |
+          curl --fail --silent --show-error -X POST "$DEPLOY_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"Deploy ${{ job.status }} for ${{ github.repository }}@${{ github.sha }} -> ${{ steps.deployment.outputs.page_url }}\"}"

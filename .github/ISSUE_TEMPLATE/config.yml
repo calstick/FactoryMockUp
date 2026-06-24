@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Project documentation (AGENTS.md)
+    url: https://github.com/calstick/FactoryMockUp/blob/main/AGENTS.md
+    about: Read setup, scripts, and conventions before opening an issue.
+  - name: Incident runbooks
+    url: https://github.com/calstick/FactoryMockUp/tree/main/runbooks
+    about: Operational playbooks for outages and CI failures.

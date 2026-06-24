@@ -35,5 +35,8 @@ jobs:
       - name: Duplicate code (jscpd)
         run: npm run dupcheck
 
+      - name: Dead feature flags (registry vs usage)
+        run: npm run deadflags
+
       - name: Validate AGENTS.md (scripts, links, paths)
         run: npm run validate:agents

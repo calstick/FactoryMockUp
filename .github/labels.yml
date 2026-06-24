@@ -1,0 +1,47 @@
+# Label taxonomy for issues and pull requests, synced by
+# .github/workflows/labels.yml. Three dimensions: priority, type, and area.
+
+# Priority
+- name: "priority:critical"
+  color: "b60205"
+  description: "Production impact; drop everything"
+- name: "priority:high"
+  color: "d93f0b"
+  description: "Important; schedule next"
+- name: "priority:medium"
+  color: "fbca04"
+  description: "Normal priority"
+- name: "priority:low"
+  color: "0e8a16"
+  description: "Nice to have"
+
+# Type
+- name: "type:bug"
+  color: "d73a4a"
+  description: "Something isn't working"
+- name: "type:feature"
+  color: "a2eeef"
+  description: "New feature or enhancement"
+- name: "type:chore"
+  color: "cfd3d7"
+  description: "Maintenance, tooling, or refactor"
+- name: "type:docs"
+  color: "0075ca"
+  description: "Documentation only"
+
+# Area
+- name: "area:frontend"
+  color: "5319e7"
+  description: "index.html UI and client logic"
+- name: "area:ci"
+  color: "1d76db"
+  description: "CI, workflows, and quality gates"
+- name: "area:observability"
+  color: "006b75"
+  description: "Logging, metrics, tracing, alerting"
+- name: "area:testing"
+  color: "c5def5"
+  description: "Test suite and coverage"
+- name: "area:dependencies"
+  color: "ededed"
+  description: "Dependency updates and management"

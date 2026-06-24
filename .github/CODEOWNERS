@@ -1,0 +1,16 @@
+# Code owners for the Weather & What to Wear repository.
+# Listed owners are automatically requested for review on matching changes.
+# Docs: https://docs.github.com/articles/about-code-owners
+
+# Default owner for anything not matched by a more specific rule below.
+* @calstick
+
+# Application code, markup, and tests.
+/src/        @calstick
+/tests/      @calstick
+/index.html  @calstick
+
+# Build tooling, CI workflows, and repository governance.
+/scripts/    @calstick
+/.github/    @calstick
+/AGENTS.md   @calstick

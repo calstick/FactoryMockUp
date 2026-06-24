@@ -4,6 +4,102 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Weather &amp; What to Wear</title>
+
+    <!--
+      Observability configuration. Deployments set real values here (or inject
+      this object at deploy time / via environment-substituted config) to light
+      up error tracking and product analytics. Left empty, the app degrades to
+      structured console logging with no external calls.
+    -->
+    <script>
+      window.APP_CONFIG = window.APP_CONFIG || {
+        release: "weather-what-to-wear@1.0.0",
+        environment: "production",
+        sentryDsn: "", // set to your Sentry DSN to enable error reporting
+        posthogKey: "", // set to your PostHog project key to enable analytics
+        posthogHost: "https://us.i.posthog.com",
+        // Dashboards to consult when judging the impact of a deploy.
+        dashboards: {
+          sentry: "https://sentry.io/organizations/your-org/issues/",
+          posthog: "https://us.posthog.com/project/your-project/dashboard",
+          pages: "https://github.com/calstick/FactoryMockUp/deployments"
+        }
+      };
+    </script>
+
+    <!-- Error tracking: Sentry browser SDK, initialized only when a DSN is set. -->
+    <script>
+      (function loadSentry() {
+        var cfg = window.APP_CONFIG || {};
+        if (!cfg.sentryDsn) return;
+        var s = document.createElement("script");
+        s.src = "https://browser.sentry-cdn.com/7.120.0/bundle.tracing.min.js";
+        s.crossOrigin = "anonymous";
+        s.onload = function () {
+          if (!window.Sentry) return;
+          window.Sentry.init({
+            dsn: cfg.sentryDsn,
+            release: cfg.release,
+            environment: cfg.environment,
+            tracesSampleRate: 0.2,
+            // Breadcrumbs are enabled by default; keep a generous buffer.
+            maxBreadcrumbs: 50
+          });
+        };
+        document.head.appendChild(s);
+      })();
+    </script>
+
+    <!-- Product analytics: PostHog snippet, initialized only when a key is set. -->
+    <script>
+      (function loadPostHog() {
+        var cfg = window.APP_CONFIG || {};
+        if (!cfg.posthogKey) return;
+        !(function (t, e) {
+          var o, n, p, r;
+          e.__SV ||
+            ((window.posthog = e),
+            (e._i = []),
+            (e.init = function (i, s, a) {
+              function g(t, e) {
+                var o = e.split(".");
+                2 == o.length && ((t = t[o[0]]), (e = o[1]));
+                t[e] = function () {
+                  t.push([e].concat(Array.prototype.slice.call(arguments, 0)));
+                };
+              }
+              (p = t.createElement("script")).type = "text/javascript";
+              p.async = !0;
+              p.src = s.api_host + "/static/array.js";
+              (r = t.getElementsByTagName("script")[0]).parentNode.insertBefore(p, r);
+              var u = e;
+              for (
+                void 0 !== a ? (u = e[a] = []) : (a = "posthog"),
+                  u.people = u.people || [],
+                  u.toString = function (t) {
+                    var e = "posthog";
+                    return ("posthog" !== a && (e += "." + a), t || (e += " (stub)"), e);
+                  },
+                  u.people.toString = function () {
+                    return u.toString(1) + ".people (stub)";
+                  },
+                  o =
+                    "capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(
+                      " "
+                    ),
+                  n = 0;
+                n < o.length;
+                n++
+              )
+                g(u, o[n]);
+              e._i.push([i, s, a]);
+            }),
+            (e.__SV = 1));
+        })(document, window.posthog || []);
+        window.posthog.init(cfg.posthogKey, { api_host: cfg.posthogHost });
+      })();
+    </script>
+
     <style>
       :root {
         --bg-1: #1e3a5f;
@@ -347,7 +443,7 @@
       <main id="content" hidden>
         <section id="current" class="card current"></section>
         <section id="recommendation" class="card rec"></section>
-        <h3 class="section-title">Next days</h3>
+        <h3 id="forecast-title" class="section-title">Next days</h3>
         <section id="forecast" class="forecast-grid"></section>
       </main>
 
@@ -372,8 +468,45 @@
         fetchForecast
       } from "./src/weather.js";
       import { logger } from "./src/logger.js";
+      import { flagsFromBrowser } from "./src/feature-flags.js";
+      import { createTrace, tracedFetch } from "./src/trace.js";
+      import { createMetrics } from "./src/metrics.js";
+      import { createAnalytics } from "./src/analytics.js";
+      import { createErrorTracker } from "./src/error-tracking.js";
 
       const log = logger.child({ component: "ui" });
+      const config = window.APP_CONFIG || {};
+
+      // Observability wiring. One trace id per page session; metrics, analytics
+      // and error tracking degrade gracefully when no backend/SDK is present.
+      const trace = createTrace();
+      const metrics = createMetrics({ endpoint: config.metricsEndpoint });
+      const analytics = createAnalytics();
+      const errors = createErrorTracker();
+      errors.setContext({
+        release: config.release,
+        environment: config.environment,
+        traceId: trace.traceId
+      });
+
+      // Route Open-Meteo calls through a traced fetch so every request carries
+      // trace headers and is timed/logged against the session trace id.
+      const fetchWithTrace = tracedFetch(window.fetch.bind(window), trace);
+
+      // Surface uncaught errors and promise rejections with full context.
+      window.addEventListener("error", (e) => errors.captureError(e.error || e.message));
+      window.addEventListener("unhandledrejection", (e) => errors.captureError(e.reason));
+      metrics.increment("page_view");
+      analytics.track("app_loaded", { release: config.release });
+
+      // Flush collected metrics when the page is hidden/unloaded.
+      window.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") metrics.flush();
+      });
+
+      // Resolved once per page load. Override at runtime with a query param
+      // (e.g. ?ff_outfitTips=off) or a localStorage key (ff_outfitTips).
+      const flags = flagsFromBrowser();
 
       let unit = "C"; // "C" or "F"
       let lastData = null; // cache last forecast so unit toggle re-renders without refetch
@@ -429,23 +562,30 @@
           "</div>";
 
         // Recommendation card (based on how it feels right now)
-        const rec = clothingAdvice(cur.apparent_temperature, code, cur.wind_speed_10m, 0);
-        $("recommendation").innerHTML =
-          '<div class="head"><h2>What to wear</h2><span class="badge">' +
-          rec.headline +
-          "</span></div>" +
-          "<ul>" +
-          rec.tips
-            .map(function (t) {
-              return "<li>" + escapeHtml(t) + "</li>";
-            })
-            .join("") +
-          "</ul>";
+        const recEl = $("recommendation");
+        recEl.hidden = !flags.isEnabled("outfitTips");
+        if (flags.isEnabled("outfitTips")) {
+          const rec = clothingAdvice(cur.apparent_temperature, code, cur.wind_speed_10m, 0);
+          recEl.innerHTML =
+            '<div class="head"><h2>What to wear</h2><span class="badge">' +
+            rec.headline +
+            "</span></div>" +
+            "<ul>" +
+            rec.tips
+              .map(function (t) {
+                return "<li>" + escapeHtml(t) + "</li>";
+              })
+              .join("") +
+            "</ul>";
+        }
 
         // Multi-day forecast
+        const forecastEnabled = flags.isEnabled("extendedForecast");
+        $("forecast").hidden = !forecastEnabled;
+        $("forecast-title").hidden = !forecastEnabled;
         const d = data.daily;
         let html = "";
-        for (let i = 0; i < d.time.length; i++) {
+        for (let i = 0; forecastEnabled && i < d.time.length; i++) {
           const dw = describe(d.weather_code[i]);
           const feelsMax = d.apparent_temperature_max[i];
           const adv = clothingAdvice(
@@ -483,26 +623,42 @@
       }
 
       async function loadCity(city) {
+        errors.addBreadcrumb("city lookup: " + city, "search");
+        const stop = metrics.time("city_lookup_ms");
         try {
           setStatus("Searching for &ldquo;" + escapeHtml(city) + "&rdquo;&hellip;");
-          const place = await geocode(city);
-          const data = await fetchForecast(place.lat, place.lon, place.name);
+          const place = await geocode(city, fetchWithTrace);
+          const data = await fetchForecast(place.lat, place.lon, place.name, fetchWithTrace);
           render(data);
+          metrics.increment("forecast_loaded");
+          analytics.track("forecast_loaded", { source: "city" });
         } catch (err) {
+          metrics.increment("lookup_error");
+          errors.captureError(err, { city });
           log.error("city lookup failed", { city }, err);
           setStatus(escapeHtml(err.message || "Something went wrong."), true);
+        } finally {
+          stop();
         }
       }
 
       async function loadCoords(lat, lon, label) {
+        errors.addBreadcrumb("coordinate lookup", "geolocation");
+        const stop = metrics.time("coords_lookup_ms");
         try {
           setStatus("Loading weather&hellip;");
-          const data = await fetchForecast(lat, lon, label);
+          const data = await fetchForecast(lat, lon, label, fetchWithTrace);
           render(data);
+          metrics.increment("forecast_loaded");
+          analytics.track("forecast_loaded", { source: "coords" });
         } catch (err) {
           // lat/lon are scrubbed by the logger before output.
+          metrics.increment("lookup_error");
+          errors.captureError(err, { label });
           log.error("coordinate lookup failed", { lat, lon, label }, err);
           setStatus(escapeHtml(err.message || "Something went wrong."), true);
+        } finally {
+          stop();
         }
       }
 
@@ -510,10 +666,14 @@
       $("search-form").addEventListener("submit", function (e) {
         e.preventDefault();
         const city = $("city-input").value.trim();
-        if (city) loadCity(city);
+        if (city) {
+          analytics.track("city_search");
+          loadCity(city);
+        }
       });
 
       $("geo-btn").addEventListener("click", function () {
+        analytics.track("geolocate_click");
         if (!navigator.geolocation) {
           setStatus("Geolocation is not supported by this browser.", true);
           return;
@@ -532,6 +692,7 @@
 
       function setUnit(u) {
         unit = u;
+        analytics.track("unit_toggle", { unit: u });
         $("unit-c").classList.toggle("active", u === "C");
         $("unit-f").classList.toggle("active", u === "F");
         if (lastData) render(lastData);
@@ -542,6 +703,11 @@
       $("unit-f").addEventListener("click", function () {
         setUnit("F");
       });
+
+      // Hide the unit switcher entirely when its flag is off.
+      document
+        .querySelector(".unit-toggle")
+        .toggleAttribute("hidden", !flags.isEnabled("fahrenheitToggle"));
 
       // Initial load: try geolocation, fall back to a default city.
       (function init() {

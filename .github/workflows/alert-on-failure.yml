@@ -1,0 +1,91 @@
+name: Alert on Failure
+
+# Active alerting + error-to-insight pipeline. When a core workflow (Tests,
+# Code Quality, or Deploy) fails on main, this:
+#   1. Pages on-call via PagerDuty Events API v2 (when a routing key is set).
+#   2. Opens / refreshes a tracking GitHub issue so the failure becomes an
+#      actionable, assignable work item instead of a buried red X.
+# Both steps degrade gracefully when their secret/config is absent.
+on:
+  workflow_run:
+    workflows: ["Tests", "Code Quality", "Deploy"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  alert:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      # 1) Page on-call. PagerDuty Events API v2 "trigger" with a dedup key so
+      #    repeated failures of the same workflow coalesce into one incident.
+      - name: Trigger PagerDuty incident
+        if: env.PAGERDUTY_ROUTING_KEY != ''
+        env:
+          PAGERDUTY_ROUTING_KEY: ${{ secrets.PAGERDUTY_ROUTING_KEY }}
+          WF: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          curl --fail --silent --show-error -X POST https://events.pagerduty.com/v2/enqueue \
+            -H 'Content-Type: application/json' \
+            -d @- <<JSON
+          {
+            "routing_key": "${PAGERDUTY_ROUTING_KEY}",
+            "event_action": "trigger",
+            "dedup_key": "${{ github.repository }}:${WF}",
+            "payload": {
+              "summary": "${WF} failed on ${{ github.repository }}",
+              "source": "${{ github.repository }}",
+              "severity": "error",
+              "custom_details": { "run_url": "${RUN_URL}" }
+            }
+          }
+          JSON
+
+      # 2) Turn the failure into an actionable issue (create, or comment if an
+      #    open one for this workflow already exists).
+      - name: Open or update tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const marker = `<!-- alert:${run.name} -->`;
+            const title = `CI failure: ${run.name} on ${run.head_branch}`;
+            const body = [
+              marker,
+              `**Workflow:** ${run.name}`,
+              `**Branch:** ${run.head_branch}`,
+              `**Commit:** ${run.head_sha}`,
+              `**Run:** ${run.html_url}`,
+              "",
+              "Automatically filed by the Alert on Failure workflow.",
+            ].join("\n");
+
+            const existing = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:body "${marker}"`,
+            });
+
+            if (existing.data.total_count > 0) {
+              const number = existing.data.items[0].number;
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: number,
+                body: `Recurred: ${run.html_url}`,
+              });
+              return;
+            }
+
+            const created = await github.rest.issues.create({ ...context.repo, title, body });
+            // Labels are best-effort: never let a missing label block the alert.
+            try {
+              await github.rest.issues.addLabels({
+                ...context.repo,
+                issue_number: created.data.number,
+                labels: ["type:bug", "area:ci", "priority:high"],
+              });
+            } catch (e) {
+              core.warning(`Could not apply labels: ${e.message}`);
+            }
