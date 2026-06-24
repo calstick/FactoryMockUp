@@ -34,3 +34,6 @@ jobs:
 
       - name: Duplicate code (jscpd)
         run: npm run dupcheck
+
+      - name: Validate AGENTS.md (scripts, links, paths)
+        run: npm run validate:agents

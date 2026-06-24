@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "deadcode": "knip",
     "dupcheck": "jscpd src tests",
-    "check": "npm run lint && npm run format:check && npm run typecheck && npm run deadcode && npm run dupcheck && npm test",
+    "validate:agents": "node scripts/validate-agents-md.mjs",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run deadcode && npm run dupcheck && npm run validate:agents && npm test",
     "prepare": "husky"
   },
   "lint-staged": {
