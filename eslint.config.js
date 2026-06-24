@@ -12,7 +12,9 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
-      globals: { ...globals.browser }
+      // `process` is read defensively (typeof guard) for an optional LOG_LEVEL
+      // override; the code remains browser-safe when it is undefined.
+      globals: { ...globals.browser, process: "readonly" }
     },
     rules: {
       // Naming consistency: enforce camelCase identifiers (API response keys,

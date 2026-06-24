@@ -103,6 +103,25 @@ GitHub Actions runs two workflows:
 Both checks (`test` and `quality`) are **required status checks on the protected
 `main` branch** (PRs required; no force-push or branch deletion).
 
+## Logging & Observability
+
+Structured logging lives in `src/logger.js` (`createLogger` + a default
+`logger`). Records are emitted as single-line JSON (`level`, `time`, `msg`, plus
+context) via the console sink, so they are machine-parseable in the browser and
+any log drain.
+
+- Use `logger.child({ component: "..." })` to tag a subsystem (e.g. `weather`,
+  `ui`).
+- **Log scrubbing:** sensitive fields are redacted before output. Keys in
+  `SENSITIVE_KEYS` (precise geolocation `lat`/`lon`/`latitude`/`longitude`,
+  `coords`, `address`, `ip`, `email`, tokens, passwords, etc.) are replaced with
+  `[REDACTED]` recursively. When logging coordinates, pass them as context keys
+  (e.g. `log.info("...", { lat, lon })`) so they are scrubbed automatically;
+  never interpolate raw secrets/PII into the `msg` string.
+- **Level control:** the default level is `info`; set `LOG_LEVEL`
+  (`debug|info|warn|error|silent`) to adjust. Tests run with `LOG_LEVEL=silent`
+  and inject their own sink when asserting on log output.
+
 ## External Services
 
 The app calls the **Open-Meteo** APIs directly from the browser:

@@ -371,6 +371,9 @@
         geocode,
         fetchForecast
       } from "./src/weather.js";
+      import { logger } from "./src/logger.js";
+
+      const log = logger.child({ component: "ui" });
 
       let unit = "C"; // "C" or "F"
       let lastData = null; // cache last forecast so unit toggle re-renders without refetch
@@ -486,6 +489,7 @@
           const data = await fetchForecast(place.lat, place.lon, place.name);
           render(data);
         } catch (err) {
+          log.error("city lookup failed", { city }, err);
           setStatus(escapeHtml(err.message || "Something went wrong."), true);
         }
       }
@@ -496,6 +500,8 @@
           const data = await fetchForecast(lat, lon, label);
           render(data);
         } catch (err) {
+          // lat/lon are scrubbed by the logger before output.
+          log.error("coordinate lookup failed", { lat, lon, label }, err);
           setStatus(escapeHtml(err.message || "Something went wrong."), true);
         }
       }

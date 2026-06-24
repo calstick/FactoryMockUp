@@ -1,6 +1,10 @@
 // Pure weather/forecast logic for the "Weather & What to Wear" app.
 // Kept free of DOM access so it can be unit-tested in Node and reused in the browser.
 
+import { logger } from "./logger.js";
+
+const log = logger.child({ component: "weather" });
+
 /**
  * @typedef {Object} WeatherInfo
  * @property {string} label
@@ -202,11 +206,24 @@ export async function geocode(city, fetchImpl = fetch) {
   const url =
     "https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" +
     encodeURIComponent(city);
+  log.info("geocode requested", { city });
   const res = await fetchImpl(url);
-  if (!res.ok) throw new Error("Geocoding failed");
+  if (!res.ok) {
+    log.error(
+      "geocode request failed",
+      { city, status: res.status },
+      new Error("Geocoding failed")
+    );
+    throw new Error("Geocoding failed");
+  }
   const data = await res.json();
-  if (!data.results || data.results.length === 0) throw new Error("No matching city found.");
+  if (!data.results || data.results.length === 0) {
+    log.warn("geocode found no match", { city });
+    throw new Error("No matching city found.");
+  }
   const r = data.results[0];
+  // lat/lon are scrubbed by the logger before output.
+  log.info("geocode resolved", { city, lat: r.latitude, lon: r.longitude });
   return {
     lat: r.latitude,
     lon: r.longitude,
@@ -243,9 +260,19 @@ export function buildForecastUrl(lat, lon) {
  * @returns {Promise<any>}
  */
 export async function fetchForecast(lat, lon, name, fetchImpl = fetch) {
+  // lat/lon are scrubbed by the logger before output.
+  log.info("forecast requested", { lat, lon });
   const res = await fetchImpl(buildForecastUrl(lat, lon));
-  if (!res.ok) throw new Error("Could not load the forecast.");
+  if (!res.ok) {
+    log.error(
+      "forecast request failed",
+      { lat, lon, status: res.status },
+      new Error("Could not load the forecast.")
+    );
+    throw new Error("Could not load the forecast.");
+  }
   const data = await res.json();
   data.placeName = name || "Selected location";
+  log.info("forecast loaded", { placeName: data.placeName });
   return data;
 }
