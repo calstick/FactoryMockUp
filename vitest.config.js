@@ -5,6 +5,10 @@ export default defineConfig({
     environment: "node",
     globals: false,
 
+    // Keep test output clean: the default app logger reads LOG_LEVEL and stays
+    // quiet here. Tests that assert on logging inject their own sink instead.
+    env: { LOG_LEVEL: "silent" },
+
     // Test file naming convention: every test lives under tests/ and ends in .test.js / .spec.js.
     include: ["tests/**/*.{test,spec}.js"],
 
