@@ -129,6 +129,13 @@ Conventions enforced:
 - **Types:** `src/weather.js` is annotated with JSDoc and type-checked under
   TypeScript `strict` mode.
 
+## Runbooks
+
+Incident-response playbooks live in [`runbooks/`](./runbooks/README.md). They
+cover the app's realistic failure modes — Open-Meteo API outages, the hosted
+site being down, CI/quality-gate failures, and broken geolocation — with
+concrete diagnose/mitigate/verify steps.
+
 ## External Services
 
 | Service                                                                  | Purpose                               | Auth           |

@@ -36,8 +36,8 @@ export default [
     }
   },
   {
-    // Test files and Node-run config files.
-    files: ["tests/**/*.js", "*.config.js"],
+    // Test files, Node-run config files, and maintenance scripts.
+    files: ["tests/**/*.js", "*.config.js", "scripts/**/*.{js,mjs}"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
