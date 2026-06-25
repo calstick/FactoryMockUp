@@ -83,7 +83,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       # Deployment observability: record where to watch this deploy's impact so
       # anyone (human or agent) can find the dashboards from the run itself.
