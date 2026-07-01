@@ -37,7 +37,7 @@ jobs:
       # Cache the esbuild transform output keyed on the sources it depends on,
       # so unchanged builds restore instantly instead of re-minifying.
       - name: Cache build output
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: dist
           key: build-${{ runner.os }}-${{ hashFiles('src/**/*.js', 'index.html', 'scripts/build.mjs') }}
